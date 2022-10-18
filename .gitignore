@@ -11,3 +11,6 @@ Cargo.lock
 
 # executables
 a.out
+
+# MacOS
+.DS_Store
