@@ -67,3 +67,12 @@ for company in &companies {
     println!("{}", company);
 }
 ```
+
+* Typing in slices
+
+```rust
+let nums: Vec<i32> = vec![1, 2, 3, 4, 5];
+let slice: &[i32] = &nums;
+let elem: i32 = slice[0];  // this is a copy of the value
+let elem: &i32 = &slice[0]: // this is an immutable reference
+```
