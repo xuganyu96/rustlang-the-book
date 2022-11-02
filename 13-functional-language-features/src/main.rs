@@ -1,4 +1,5 @@
 use functional_features::closure::{self, Inventory, ShirtColor};
+use functional_features::iterator;
 
 fn main() {
     let inventory = Inventory {
@@ -13,4 +14,10 @@ fn main() {
 
     closure::closure_type_annotation();
     closure::closure_capture_values();
+
+    iterator::basic_iterator();
+    iterator::iterator_next();
+    iterator::consuming_adapters();
+    iterator::iterator_adapters();
+    iterator::iterator_filter();
 }
