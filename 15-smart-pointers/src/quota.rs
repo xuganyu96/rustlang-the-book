@@ -1,51 +1,80 @@
-//! 15.5: RefCell<T> and the interior mutability pattern
-//!
-//! Let's implement some kind of quota tracker: it will be instantiated with
-//! some upper limit and some "messenger" instance such that a tracker object
-//! can automatically calls the messenger object to send some message based on
-//! the most recent value
+//! 15.5 RefCell<T> and the interior mutability pattern
+//! Let's build some kind of quota tracker. The tracker will be instantiated
+//! with some kind of mechanism to emit events when usage level changes. The
+//! behavior of the mechanism is abstracted into a trait, but the impl will
+//! be left to the developers
 
-/// Any type that implements the Messenger trait indicates that it can emit
-/// some string message somewhere. The type is responsible for providing
-/// implementation of how to send the message to its intended destination
+/// Specifies the interface of the "event emission" mechanism
+/// A messenger is expected to be **stateless**!. Hence calling self.emit
+/// should not mutate the instance.
 pub trait Messenger {
-    pub fn send(&self, msg: &str);
+    fn emit(&self, msg: &str);
 }
 
-/// The QuotaTrakcer object will hold an immutable reference to a Messenger
-/// object (instead of owning the Messenger object). Any reference to a
-/// quota trakcer must be valid for as long as the reference to the messenger
-/// is valid
+/// The tracker struct itself
 pub struct QuotaTracker<'a, T: Messenger> {
-    messenger: &'a T,
     level: usize,
     limit: usize,
+    messenger: &'a T,
 }
 
-impl<'a, T> QuotaTracker<'a, T> {
-    pub fn new(m: &'a T, limit: usize) -> QuotaTracker {
-        QuotaTracker{
-            messenger: m,
-            level: 0,
-            limit,
-        }
+impl<'a, T: Messenger> QuotaTracker<'a, T> {
+    /// Instantiate a new tracker given the input limit and messenger object
+    pub fn new(limit: usize, messenger: &'a T) -> Self {
+        QuotaTracker{ level: 0, limit, messenger }
     }
 
-    pub fn set(&mut self, level: usize) {
+    /// Set the level and emit the appropriate message
+    pub fn set_level(&mut self, level: usize) {
         self.level = level;
-        let limit = self.limit;
 
-        match level {
-            0..limit => self.m.send("OK"),
-            _ => self.m.send("ERROR"),
+        if level <= self.limit {
+            self.messenger.emit("OK");
+        } else {
+            self.messenger.emit("ERROR");
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use core::cell::RefCell;
+
+    /// A mock messenger for testing purposes. All calls to emit will clone
+    /// the message and push it onto a Vector. However, the vector cannot be
+    /// owned by the messenger since the messenger cannot mutate itself.
+    /// Instead, the messenger will hold *some mutable reference to the
+    /// vector*. This is where RefCell<T> and the "interior mutatbility
+    /// pattern" comes in.
+    struct MockMessenger {
+        messages: RefCell<Vec<String>>,
+    }
+
+    impl MockMessenger {
+        fn new() -> Self {
+            let messages = RefCell::new(Vec::new());
+            return MockMessenger{ messages };
+        }
+    }
+
+    impl Messenger for MockMessenger {
+        fn emit(&self, msg: &str) {
+            self.messages.borrow_mut().push(msg.to_string());
+        }
+    }
+
     #[test]
-    fn set_quota_level() {
+    fn set_quota_levels() {
+        let messenger = MockMessenger::new();
+        let mut tracker = QuotaTracker::new(10, &messenger);
+        tracker.set_level(0);
+        tracker.set_level(10);
+        tracker.set_level(100);
+
+        let messages_ref = messenger.messages.borrow();
+        assert_eq!(messages_ref.get(0), Some(&"OK".to_string()));
+        assert_eq!(messages_ref.get(1), Some(&"OK".to_string()));
+        assert_eq!(messages_ref.get(2), Some(&"ERROR".to_string()));
     }
 }
-
