@@ -1,5 +1,5 @@
 # Questions
-## Why does this not work
+## Why does this not work???
 The idea with the first example is "an element of a singly linked list is either `Nil` or `Cons(i32, <some pointer to another elemnet>)`. The natural thing I come up with is, why couldn't I do this:
 
 ```rust
@@ -46,4 +46,19 @@ This implementation of `emit` does not compile because `self` is an immutable re
 
 ```
 cannot borrow `*self.messages` as mutable as it is behind a `&` reference
+```
+
+## Borrow checker at runtime
+Recall that `RefCell<T>` can return immutable references through the `borrow()` method and mutable references through the `borrow_mut()` references.
+
+The object will keep track of the references that were borrowed at runtime. If calling `borrow()` or `borrow_mut()` will break the borrow checker rules, the method will panic:
+
+```rust
+use core::cell::RefCell;
+
+fn main() {
+    let refcell = RefCell::new(String::from("Hello, world"));
+    let ref_ = refcell.borrow();
+    let mutref = refcell.borrow_mut();  // program will panic here    
+}
 ```

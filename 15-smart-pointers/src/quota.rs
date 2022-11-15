@@ -77,4 +77,14 @@ mod tests {
         assert_eq!(messages_ref.get(1), Some(&"OK".to_string()));
         assert_eq!(messages_ref.get(2), Some(&"ERROR".to_string()));
     }
+
+    /// The borrow-checker rules are enforced at runtime for RefCell and the
+    /// "Ref" and "RefMut" objects that can be borrowed.
+    #[test]
+    #[should_panic]
+    fn borrow_checker_runtime_violation() {
+        let refcell = RefCell::new(String::from("foobar"));
+        let _borrow_one = refcell.borrow();
+        let _borrow_two = refcell.borrow_mut(); // expect panic here
+    }
 }
