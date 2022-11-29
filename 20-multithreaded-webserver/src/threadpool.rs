@@ -9,7 +9,7 @@ type Job = Box<dyn FnOnce() + Send + 'static>;
 /// representing a collection of workers
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: Option<mpsc::Sender<Job>>,
 }
 
 
@@ -31,14 +31,33 @@ impl ThreadPool {
 
         return ThreadPool {
             workers,
-            sender,
+            sender: Some(sender),
         }
     }
 
     /// Send the input closure to one of the worker for execution
     pub fn execute<F>(&self, f: F)
         where F: FnOnce() + Send + 'static {
-        self.sender.send(Box::new(f)).unwrap();
+        if let Some(_sender) = &self.sender {
+            _sender.send(Box::new(f)).unwrap();
+        }
+    }
+}
+
+/// Gracefully shutdown the threadpool by letting each worker finish serving
+/// its current request before worker thread joins the main thread
+impl Drop for ThreadPool {
+    /// First drop the sender. Dropping the (only) sender will close the
+    /// message channel, and worker calling receiver will receive errors.
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        for worker in &mut self.workers {
+            if let Some(_handle) = worker.handle.take() {
+                _handle.join().unwrap();
+            }
+            println!("Worker {} gracefully exited", worker.id);
+        }
     }
 }
 
@@ -46,7 +65,7 @@ impl ThreadPool {
 /// so that multiple worker can receive closure from the thread pool to execute
 struct Worker {
     id: usize,
-    handle: JoinHandle<()>,
+    handle: Option<JoinHandle<()>>,
 }
 
 impl Worker {
@@ -56,13 +75,20 @@ impl Worker {
                 let job = receiver
                     .lock()  // Result<MutexGuard<...>>
                     .unwrap()  // MutexGuard<Receiver<Job>>
-                    .recv()  // Result<Job>
-                    .unwrap();
+                    .recv();  // Result<Job, Err>
 
-                println!("worker {id} received a new job");
-                job();
+                match job {
+                    Ok(_job) => {
+                        println!("worker {id} received a new job");
+                        _job();
+                    },
+                    Err(_) => {
+                        println!("Channel closed. Worker {id} exiting");
+                        return ();
+                    },
+                }
             }
         });
-        return Worker{ id, handle };
+        return Worker{ id, handle: Some(handle) };
     }
 }
